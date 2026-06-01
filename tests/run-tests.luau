@@ -64,6 +64,9 @@ local BoundingBox
 local QuadTree
 local GridHash
 local SpatialHash
+local Vec3
+local BoundingBox3D
+local OcTree
 
 -- Try Roblox-style requires first, fall back to file paths
 pcall(function()
@@ -72,6 +75,9 @@ pcall(function()
     QuadTree = require(script.Parent.src.QuadTree)
     GridHash = require(script.Parent.src.GridHash)
     SpatialHash = require(script.Parent.src.SpatialHash)
+    Vec3 = require(script.Parent.src.Vec3)
+    BoundingBox3D = require(script.Parent.src.BoundingBox3D)
+    OcTree = require(script.Parent.src.OcTree)
 end)
 
 if not Vec2 then
@@ -80,6 +86,9 @@ if not Vec2 then
     QuadTree = require("../src/QuadTree")
     GridHash = require("../src/GridHash")
     SpatialHash = require("../src/SpatialHash")
+    Vec3 = require("../src/Vec3")
+    BoundingBox3D = require("../src/BoundingBox3D")
+    OcTree = require("../src/OcTree")
 end
 
 ------------------------------------------------------
@@ -406,6 +415,287 @@ describe("SpatialHash", function()
         sh:insert(Vec2.new(20, 20), 10, "b")
         sh:clear()
         assertEqual(sh:count(), 0, "count after clear")
+    end)
+end)
+
+------------------------------------------------------
+-- Vec3 Tests
+------------------------------------------------------
+describe("Vec3", function()
+    test("creates a vector with correct components", function()
+        local v = Vec3.new(1, 2, 3)
+        assertEqual(v.x, 1, "x")
+        assertEqual(v.y, 2, "y")
+        assertEqual(v.z, 3, "z")
+    end)
+
+    test("zero returns (0,0,0)", function()
+        local v = Vec3.zero()
+        assertEqual(v.x, 0, "x")
+        assertEqual(v.y, 0, "y")
+        assertEqual(v.z, 0, "z")
+    end)
+
+    test("length returns correct magnitude", function()
+        local v = Vec3.new(1, 2, 2)
+        assertApprox(v:length(), 3, 0.0001, "length")
+    end)
+
+    test("lengthSquared returns squared magnitude", function()
+        local v = Vec3.new(1, 2, 2)
+        assertEqual(v:lengthSquared(), 9, "lengthSquared")
+    end)
+
+    test("distanceTo computes 3D distance", function()
+        local a = Vec3.new(0, 0, 0)
+        local b = Vec3.new(1, 2, 2)
+        assertApprox(a:distanceTo(b), 3, 0.0001, "distance")
+    end)
+
+    test("distanceSquaredTo computes squared distance", function()
+        local a = Vec3.new(0, 0, 0)
+        local b = Vec3.new(1, 2, 2)
+        assertEqual(a:distanceSquaredTo(b), 9, "distanceSquared")
+    end)
+
+    test("normalize returns unit vector", function()
+        local v = Vec3.new(0, 3, 4):normalize()
+        assertApprox(v:length(), 1, 0.0001, "normalized length")
+    end)
+
+    test("normalize of zero vector returns zero", function()
+        local v = Vec3.zero():normalize()
+        assertEqual(v.x, 0, "x")
+        assertEqual(v.y, 0, "y")
+        assertEqual(v.z, 0, "z")
+    end)
+
+    test("dot product", function()
+        local a = Vec3.new(1, 2, 3)
+        local b = Vec3.new(4, 5, 6)
+        assertEqual(a:dot(b), 32, "dot")
+    end)
+
+    test("cross product", function()
+        local a = Vec3.new(1, 0, 0)
+        local b = Vec3.new(0, 1, 0)
+        local c = a:cross(b)
+        assertEqual(c.x, 0, "x")
+        assertEqual(c.y, 0, "y")
+        assertEqual(c.z, 1, "z")
+    end)
+
+    test("cross product anti-commutativity", function()
+        local a = Vec3.new(1, 2, 3)
+        local b = Vec3.new(4, 5, 6)
+        local ab = a:cross(b)
+        local ba = b:cross(a)
+        assertEqual(ab.x, -ba.x, "x anti")
+        assertEqual(ab.y, -ba.y, "y anti")
+        assertEqual(ab.z, -ba.z, "z anti")
+    end)
+
+    test("add vectors", function()
+        local r = Vec3.new(1, 2, 3):add(Vec3.new(4, 5, 6))
+        assertEqual(r.x, 5, "x")
+        assertEqual(r.y, 7, "y")
+        assertEqual(r.z, 9, "z")
+    end)
+
+    test("sub vectors", function()
+        local r = Vec3.new(5, 7, 9):sub(Vec3.new(1, 2, 3))
+        assertEqual(r.x, 4, "x")
+        assertEqual(r.y, 5, "y")
+        assertEqual(r.z, 6, "z")
+    end)
+
+    test("scale vector", function()
+        local r = Vec3.new(1, 2, 3):scale(3)
+        assertEqual(r.x, 3, "x")
+        assertEqual(r.y, 6, "y")
+        assertEqual(r.z, 9, "z")
+    end)
+
+    test("clone produces equal but distinct vector", function()
+        local a = Vec3.new(1, 2, 3)
+        local b = a:clone()
+        assert_(a == b, "clones should be equal")
+        a.x = 99
+        assertEqual(b.x, 1, "clone should be independent")
+    end)
+
+    test("equality comparison", function()
+        local a = Vec3.new(1, 2, 3)
+        local b = Vec3.new(1, 2, 3)
+        local c = Vec3.new(1, 2, 4)
+        assert_(a == b, "equal vectors")
+        assert_(a ~= c, "different vectors")
+    end)
+
+    test("tostring produces readable output", function()
+        local s = tostring(Vec3.new(1, 2, 3))
+        assert_(s:find("Vec3") ~= nil, "should contain Vec3")
+    end)
+end)
+
+------------------------------------------------------
+-- BoundingBox3D Tests
+------------------------------------------------------
+describe("BoundingBox3D", function()
+    test("contains point inside bounds", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        assert_(bb:contains(Vec3.new(5, 5, 5)), "should contain interior point")
+    end)
+
+    test("does not contain point outside bounds", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        assert_(not bb:contains(Vec3.new(15, 5, 5)), "should not contain exterior point")
+        assert_(not bb:contains(Vec3.new(5, 15, 5)), "should not contain exterior point Y")
+        assert_(not bb:contains(Vec3.new(5, 5, 15)), "should not contain exterior point Z")
+    end)
+
+    test("intersects overlapping boxes", function()
+        local a = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        local b = BoundingBox3D.new(Vec3.new(5, 5, 5), Vec3.new(15, 15, 15))
+        assert_(a:intersects(b), "should intersect")
+    end)
+
+    test("non-intersecting boxes", function()
+        local a = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(5, 5, 5))
+        local b = BoundingBox3D.new(Vec3.new(10, 10, 10), Vec3.new(15, 15, 15))
+        assert_(not a:intersects(b), "should not intersect")
+    end)
+
+    test("fromCenter creates correct bounds", function()
+        local bb = BoundingBox3D.fromCenter(Vec3.new(5, 5, 5), 5)
+        assertEqual(bb.min.x, 0, "min.x")
+        assertEqual(bb.max.x, 10, "max.x")
+        assertEqual(bb.min.z, 0, "min.z")
+        assertEqual(bb.max.z, 10, "max.z")
+    end)
+
+    test("center returns correct center", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        local c = bb:center()
+        assertEqual(c.x, 5, "center.x")
+        assertEqual(c.y, 5, "center.y")
+        assertEqual(c.z, 5, "center.z")
+    end)
+
+    test("width/height/depth", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 20, 30))
+        assertEqual(bb:width(), 10, "width")
+        assertEqual(bb:height(), 20, "height")
+        assertEqual(bb:depth(), 30, "depth")
+    end)
+
+    test("containsSphere", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        assert_(bb:containsSphere(Vec3.new(5, 5, 5), 2), "sphere inside box")
+        assert_(not bb:containsSphere(Vec3.new(5, 5, 5), 20), "sphere too large")
+    end)
+
+    test("clone produces independent copy", function()
+        local bb = BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10))
+        local c = bb:clone()
+        assert_(bb:intersects(c), "clone should intersect original")
+    end)
+end)
+
+------------------------------------------------------
+-- OcTree Tests
+------------------------------------------------------
+describe("OcTree", function()
+    test("insert and count", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(20, 20, 20), "b")
+        assertEqual(ot:count(), 2, "count")
+    end)
+
+    test("insert out of bounds returns false", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        local ok = ot:insert(Vec3.new(200, 200, 200), "x")
+        assert_(not ok, "should reject out-of-bounds")
+        assertEqual(ot:count(), 0, "count")
+    end)
+
+    test("queryBox returns matching entries", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(50, 50, 50), "b")
+        ot:insert(Vec3.new(90, 90, 90), "c")
+
+        local results = ot:queryBox(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(20, 20, 20)))
+        assertEqual(#results, 1, "should find 1 entry")
+        assertEqual(results[1].data, "a", "data")
+    end)
+
+    test("queryRadius returns entries within radius", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(15, 15, 15), "b")
+        ot:insert(Vec3.new(90, 90, 90), "c")
+
+        local results = ot:queryRadius(Vec3.new(10, 10, 10), 10)
+        assertEqual(#results, 2, "should find 2 nearby entries")
+    end)
+
+    test("remove entry", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        local p = Vec3.new(10, 10, 10)
+        ot:insert(p, "a")
+        assertEqual(ot:count(), 1, "before remove")
+        ot:remove(p)
+        assertEqual(ot:count(), 0, "after remove")
+    end)
+
+    test("subdivides when capacity exceeded", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)), 2)
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(20, 20, 20), "b")
+        ot:insert(Vec3.new(30, 30, 30), "c") -- triggers subdivision
+        assertEqual(ot:count(), 3, "count after subdivision")
+        assert_(ot.divided, "should be divided")
+    end)
+
+    test("clear empties the tree", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(20, 20, 20), "b")
+        ot:clear()
+        assertEqual(ot:count(), 0, "count after clear")
+        assert_(not ot.divided, "should not be divided after clear")
+    end)
+
+    test("query empty tree returns empty", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        local results = ot:queryRadius(Vec3.new(50, 50, 50), 50)
+        assertEqual(#results, 0, "empty tree should return no results")
+    end)
+
+    test("many insertions maintain integrity", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(1000, 1000, 1000)), 4)
+        for i = 1, 100 do
+            ot:insert(Vec3.new(i * 10, i * 10, i * 10), i)
+        end
+        assertEqual(ot:count(), 100, "count")
+        local results = ot:queryRadius(Vec3.new(500, 500, 500), 200)
+        assert_(#results > 0, "should find some results")
+    end)
+
+    test("duplicate positions in OcTree", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(10, 10, 10), "a")
+        ot:insert(Vec3.new(10, 10, 10), "b")
+        assertEqual(ot:count(), 2, "should store both")
+    end)
+
+    test("queryRadius on boundary corner", function()
+        local ot = OcTree.new(BoundingBox3D.new(Vec3.new(0, 0, 0), Vec3.new(100, 100, 100)))
+        ot:insert(Vec3.new(100, 100, 100), "corner")
+        local results = ot:queryRadius(Vec3.new(95, 95, 95), 10)
+        assert_(#results >= 1, "should find corner entry")
     end)
 end)
 
