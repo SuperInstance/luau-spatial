@@ -1,0 +1,9 @@
+[package]
+name = "superinstance/luau-spatial"
+version = "0.1.0"
+license = "MIT"
+author = "SuperInstance"
+description = "Spatial indexing for Roblox games — QuadTree, GridHash, SpatialHash"
+realm = "shared"
+
+[dependencies]
